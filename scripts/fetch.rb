@@ -7,6 +7,9 @@ require 'vertebrae/net/request_processor'
 require 'vertebrae/search/result'
 require 'vertebrae/sequence/tiny_sequence_set'
 
+# Dataset Filename
+filename = "D:\\homologene.data"
+
 # Verbosity:
 # 0 = Silence
 # 1 = Standard Messages
@@ -70,11 +73,8 @@ parameters["retmax"] = 100000
 parameters["query_key"] = sresult.key
 parameters["webenv"] = sresult.environment
 
-tasks = Hash.new()
 task_count = sresult.count / parameters["retmax"] + 1
-task_count.times.with_index do |i|
-  tasks[i] = false
-end
+tasks = Array.new(task_count, false)
 
 homologene_ids = Array.new()
 
@@ -86,14 +86,14 @@ echo("- #{count} IDs Remaining", 2)
 
 successful = false
 until successful do
-  tasks.keys.each do |t|
-    next unless tasks[t] == false
-    parameters["retstart"] = t * parameters["retmax"]
+  tasks.each.with_index do |t, i|
+    next unless tasks[i] == false
+    parameters["retstart"] = i * parameters["retmax"]
     processor.enqueue("esearch.fcgi", parameters) do |result|
       next if result.error?
       sresult = Vertebrae::Search::Result.new(result.response.body)
       next if sresult.has_error?
-      tasks[t] = true
+      tasks[i] = true
       homologene_ids += sresult.id_list
       count -= parameters["retmax"]
       if count > 0
@@ -105,7 +105,7 @@ until successful do
   end
   processor.wait()
   status = true
-  tasks.each do |t, completed|
+  tasks.each do |completed|
     status = status && completed
   end
   successful = status
@@ -267,7 +267,7 @@ echo("- Finished Dataset Construction in #{etime - stime} Seconds\n", 1)
 echo("* Starting Dataset Write\n", 1)
 stime = Time.now
 
-data_file = File.open("D:\\homologene.data", "w")
+data_file = File.open(filename, "w")
 data_file.puts homolog_groups.to_yaml()
 data_file.close()
 
