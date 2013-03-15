@@ -1,20 +1,30 @@
 module HomoloGenie
-	class Protein
+    class Protein
 
-		public
+        #added reader 2013-03-05 Nathan
+        attr_reader :cost
 
-		def initialize(accession, sequence)
-			@accession = accession
-			@sequence = sequence
-		end
+        public
 
-		def accession()
-			return @accession.clone()
-		end
+        #added cost argument 2013-03-05 Nathan
+        def initialize(accession, sequence, cost = nil)
+            @accession = accession
+            @sequence = sequence
+            @cost = cost
+        end
 
-		def sequence()
-			return @sequence.clone()
-		end
+        def accession()
+            return @accession.clone()
+        end
 
-	end
+        def sequence()
+            return @sequence.clone()
+        end
+
+        #added 2013-03-05 Nathan
+        def set_cost(cost)
+            @cost = cost
+        end #def
+
+    end
 end
