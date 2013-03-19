@@ -31,14 +31,13 @@ module HomoloGenie
             @homologs[new_homolog.id] = new_homolog
 
             #TODO :implement for multiple alignments
-            if @homologs.size == 2
+            if @homologs[new_homolog.id].size == 2
                 # HomoloGenie::Cost::calc_cost(@homologs[new_homolog.id])
                 puts "Calculating cost for: "
                 p @species
                 puts "At homolog " + new_homolog.id.to_s + "\n\n"
             end #if
         end #def
-
 
     end #class
 end #module

@@ -24,6 +24,7 @@ module HomoloGenie
         #added 2013-03-05 Nathan
         def set_cost(cost)
             @cost = cost
+            return cost
         end #def
 
     end
