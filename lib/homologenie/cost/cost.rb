@@ -26,15 +26,16 @@ module HomoloGenie
         def self.calc_cost(sequence)
             total = 0
             sequence.split("").each do |char|
-                #do not accept Unknowns
-                if char == "U"
+                #only accept AA's from list
+                if @@aa_costs.has_key?(char)
+                    total += @@aa_costs[char]
+                else
                     return nil
                 end #if
-
-                total += @@aa_costs[char]
             end #do
 
-            return total
+            #ignore initial M
+            return (total - 36.5)
         end #def
 
     end #class

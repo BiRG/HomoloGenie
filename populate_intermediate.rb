@@ -5,7 +5,9 @@ $LOAD_PATH.unshift( File.join( File.dirname(__FILE__), '.' ) )
 
 require 'set'
 require 'psych'
-require 'gchart'
+# require 'gchart'
+require 'uri'
+require 'net/http'
 require 'lib/homologenie/homolog'
 require 'lib/homologenie/protein'
 require 'lib/homologenie/taxonomy'
@@ -17,18 +19,41 @@ require 'lib/homologenie/cost/cost'
 if __FILE__ == $0
 
     file_prepend = "test_"
+    CHART_URI = "http://chart.googleapis.com/chart?"
+
+    post_uri = URI.parse("http://chart.googleapis.com/chart")
+    graph_options = {'cht' => 's',          #chart type = scatter
+                    'chs' => '650x450',     #chart size
+                    'chd' => '',            #chart data will be filled later
+                    'chds' => "0,1.0,0,80",  #x,y data range
+                    'chtt' => '',           #chart title will be filled later
+                    'chxt' => "x,x,y,y",        #chart axes visible
+                    'chxl' => '0:|0.0|0.2|0.4|0.6|0.8|1.0|1:|||Match|||2:|0|10|20|30|40|50|60|70|80|3:|||Cost||',
+                    'chxs' => '1,333333,14|3,333333,14'
+                    # 'chxr' => '0,0,1,.2|2,0,80,10'
+                }
 
 
-
-    tax_ids_to_use = [  #7955,   #Danio rerio
-                    9606,   #Homo sapiens
-                    #9598,   #Pan troglodytes
+    tax_ids_to_use = [  7955,   #Danio rerio
+                    # 9606,   #Homo sapiens
+                    # 9598,   #Pan troglodytes
                     # 9544,   #Macaca mulatta
                     # 9615,   #Canis lupus familiaris
                     # 9913,   #Bos taurus
                     # 10090,  #Mus musculus
                     # 10116,  #Rattus norvegicus
                     9031]   #Gallus gallus
+
+    # tax_ids_to_use = [  7955,   #Danio rerio
+    #                 9606,   #Homo sapiens
+    # #                 9598,   #Pan troglodytes
+    # #                 9544,   #Macaca mulatta
+    # #                 9615,   #Canis lupus familiaris
+    # #                 9913,   #Bos taurus
+    # #                 10090,  #Mus musculus
+    # #                 10116,  #Rattus norvegicus
+    #                 # 9031    #Gallus gallus
+    #                 ]
 
     name_lookup = {  7955 => "Danio rerio",
                     9606 => "Homo sapiens",
@@ -37,19 +62,23 @@ if __FILE__ == $0
                     9615 => "Canis lupus familiaris",
                     9913 => "Bos taurus",
                     10090 => "Mus musculus",
-                    10116 => "#Rattus norvegicus",
+                    10116 => "Rattus norvegicus",
                     9031 => "Gallus gallus"}
 
     results = Hash.new()
 
     # homologs_in = File.new( 'data/small_database.yaml', 'r')
-    homologs_in = File.new( 'data/small_database.data', 'r')
+    homologs_in = File.new( 'data/homologene_database.data', 'r')
 
     raw_homologs = Psych.load_file( homologs_in )
+
+    homolog_count = 0
 
     #puts raw_homologs[9776].taxonomies[7955].proteins
 
     # puts raw_homologs
+
+    puts ""
 
     raw_homologs.each do |homologene_id, taxonomies|
         inner_array = tax_ids_to_use.dup()
@@ -123,14 +152,18 @@ if __FILE__ == $0
                         else
                             puts "Duplicate keys at homologene id " + homologene_id.to_s()
                         end #if
+
+
                     end #do
                 end #if
 
             end #if
         end #do
+        homolog_count += 1
+        print "\rHomologs processed: " + ( homolog_count / raw_homologs.size ).round(0).to_s + "%"
     end #do
 
-    puts "Results:"
+#    puts "Results:"
     # p results
     # p results.keys
 
@@ -140,49 +173,105 @@ if __FILE__ == $0
             set_graphs = Hash.new
 
             species_names = String.new
-            puts species_names.length.to_s
+#            puts species_names.length.to_s
 
             key.each do |taxii|
-                set_graphs[taxii] = { "cost" => Array.new, "match" => Array.new }
+                #set_graphs[taxii] = { "cost" => Array.new, "match" => Array.new }
 
-                puts species_names.length.to_s
+                #Binning
+                set_graphs[taxii] = Hash.new
+
+#                puts species_names.length.to_s
                 if species_names.length == 0
                     species_names = name_lookup[taxii]
                 else
                     species_names += " vs " + name_lookup[taxii]
                 end #if
             end #do
-            p key
-            puts "Homologs:"
+#            p key
+#            puts "Homologs:"
             value.each do |homolog|
-                p homolog.homologs.keys
-                puts "\tSet"
+#                p homolog.homologs.keys
+#                puts "\tSet"
 
                 homolog.homologs.each do |homologene_id, set_val|
 
                     set_val.taxonomies.each do |tax_key, tax_val|
-                        set_graphs[tax_key]["cost"].push((tax_val.proteins[tax_val.proteins.keys[0]].cost / tax_val.proteins[tax_val.proteins.keys[0]].sequence.length).round(2))
-                        set_graphs[tax_key]["match"].push(set_val.match.round(4))
-                        puts "\t\t" + tax_val.proteins[tax_val.proteins.keys[0]].accession.to_s
-                        puts "\t\t\tAvg cost:" + ( tax_val.proteins[tax_val.proteins.keys[0]].cost / tax_val.proteins[tax_val.proteins.keys[0]].sequence.length ).to_s
+                        #Binning - match score rounded to nearest .01
+                        #Average cost rounded to nearest whole number,
+                        # -length used does not include initial M
+
+                        #ignore
+                        set_graphs[tax_key][set_val.match.round(2)] = (tax_val.proteins[tax_val.proteins.keys[0]].cost / ( tax_val.proteins[tax_val.proteins.keys[0]].sequence.length - 1 ) ).round(0)
+                        #set_graphs[tax_key]["match"].push(set_val.match.round(4))
+
+
+
+#                        puts "\t\t" + tax_val.proteins[tax_val.proteins.keys[0]].accession.to_s
+#                        puts "\t\t\tAvg cost:" + ( tax_val.proteins[tax_val.proteins.keys[0]].cost / tax_val.proteins[tax_val.proteins.keys[0]].sequence.length ).to_s
                     end #do
 
-                    puts "\t\tMatch: " + set_val.match.to_s
+#                    puts "\t\tMatch: " + set_val.match.to_s
                 end #do
             end #do
             key.each do |taxii|
-                species_names
-                Gchart.scatter(:data => [set_graphs[taxii]["match"], set_graphs[taxii]["cost"]],
-                            :format => 'file',
-                            :filename => ( file_prepend + species_names + ".png").sub(' ','_'),
-                            :title => species_names,
-                            :axis_with_labels => ['x','y'],
-                            :axis_labels => [[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],[0,10,20,30,40,50,60,70,80]],
-                            :set_axis_range => [[0.0,0.9], [0,80]],
-                            #:max_value => 80,
-                            :size => '600x400',
-                            :encoding => 'text')
-                puts set_graphs[taxii]["match"].to_s
+
+                chd = 't:'
+                # set_graphs[taxii]["match"].each do |data|
+                #     chd += data.to_s + ','
+                # end #do
+                # chd = chd.chop + '|'
+
+                # set_graphs[taxii]["cost"].each do |data|
+                #     chd += data.to_s + ','
+                # end #do
+                # chd.chop!
+
+                #binning
+
+                chd_match = String.new
+                chd_cost = String.new
+
+                set_graphs[taxii].each do |match_binned,cost_binned|
+                    chd_match += match_binned.to_s + ','
+                    chd_cost += cost_binned.to_s + ','
+                end #do
+
+                chd += chd_match.chop! + '|' + chd_cost.chop!
+
+                graph_options["chd"] = chd
+
+                graph_options["chtt"] = name_lookup[taxii] + " for " + species_names
+
+                filename = ("temp " + graph_options["chtt"] + ".png").gsub(' ','_')
+
+                query = CHART_URI
+                graph_options.each do |feature, attribute|
+                    query += feature + '=' + attribute + '&'
+                end
+
+                query = query.chop!.gsub(' ','%20')
+
+                #puts "length: " + query.length.to_s
+                #puts query
+
+
+                http = Net::HTTP.new(post_uri.host, post_uri.port)
+                # http.use_ssl = true
+
+                request = Net::HTTP::Post.new(post_uri.request_uri)
+                request.set_form_data(graph_options)
+
+                response = http.request(request)
+                out_file = File.new('./data/charts/' + filename, 'w')
+
+                out_file.write(response.body)
+
+                out_file.close
+                # puts set_graphs[taxii]["match"].to_s
+                #puts chd_cost
+                #puts chd_match
+                #p graph_options
 
             end #do
         end #do
